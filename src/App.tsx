@@ -11,6 +11,7 @@ import { ReceiveTransfer } from '@/components/receive-transfer';
 import { Footer } from '@/components/footer';
 import { TransmittalModal } from '@/components/transmittal-modal';
 import { QuickCodeModal } from '@/components/quick-code-modal';
+import { AdminPortal } from '@/components/admin-portal';
 import { CodedTransferItem } from '@/lib/transfer-store';
 
 export default function App() {
@@ -29,6 +30,8 @@ export default function App() {
       const hash = window.location.hash;
       if (hash.startsWith('#verify')) {
         setActiveTab('verify');
+      } else if (hash.startsWith('#admin') || hash.startsWith('#staff')) {
+        setActiveTab('admin');
       } else if (hash.startsWith('#careers') || hash.startsWith('#jobs')) {
         setActiveTab('careers');
       } else if (hash.startsWith('#services') || hash.startsWith('#what-we-do')) {
@@ -130,7 +133,12 @@ export default function App() {
 
         {/* TAB 5: JOB LETTER VERIFICATION PORTAL */}
         {activeTab === 'verify' && (
-          <VerificationView />
+          <VerificationView onGoToAdmin={() => handleNavChange('admin')} />
+        )}
+
+        {/* TAB 6: ADMIN & HR DIRECTORATE PORTAL (PASSWORD PROTECTED) */}
+        {activeTab === 'admin' && (
+          <AdminPortal onBackToSite={() => handleNavChange('home')} />
         )}
 
         {/* TAB 6: SUBCONTRACTOR CODED FILE VAULT (E2EE) */}
@@ -213,6 +221,7 @@ export default function App() {
         onGoToProjects={() => handleNavChange('projects')}
         onGoToVerify={() => handleNavChange('verify')}
         onGoToVault={() => handleNavChange('vault')}
+        onGoToAdmin={() => handleNavChange('admin')}
       />
 
       {/* Transmittal Record Print Modal */}

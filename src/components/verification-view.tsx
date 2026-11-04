@@ -1,9 +1,8 @@
-import { useState } from 'react';
+import { useState, useRef, DragEvent, ChangeEvent } from 'react';
 import {
   ShieldCheck,
   Upload,
   ArrowUpRight,
-  KeyRound,
   BadgeCheck,
   Building2,
   Lock,
@@ -12,129 +11,409 @@ import {
   AlertCircle,
   Copy,
   Check,
-  ArrowLeft,
   Download,
+  Search,
+  CheckCircle2,
+  Clock,
+  Trash2,
+  FileImage,
+  Mail,
+  Phone,
+  HelpCircle,
+  FileCheck2,
 } from 'lucide-react';
 import { WE_BUILD_AUSTRALIA_PROFILE } from '@/data/webuild-australia';
+import {
+  verificationStore,
+  VerificationSubmission,
+} from '@/lib/verification-store';
+import { formatBytes } from '@/lib/crypto';
 
-const AUTHORIZED_KEYS = [
-  '9482017365',
-  '5829104738',
-  '7102948563',
-  '8392014756',
-  '6201948375',
-];
+interface VerificationViewProps {
+  onGoToAdmin?: () => void;
+}
 
-export function VerificationView() {
-  const [step, setStep] = useState<'submit' | 'enter_key' | 'verified'>('submit');
+const ACCEPTED_EXTENSIONS = ['.pdf', '.png', '.jpg', '.jpeg', '.webp', '.docx', '.doc'];
+const MAX_FILE_SIZE = 25 * 1024 * 1024; // 25 MB
+
+export function VerificationView({ onGoToAdmin }: VerificationViewProps) {
+  // Submission Form State
   const [candidateName, setCandidateName] = useState('');
   const [email, setEmail] = useState('');
-  const [fileName, setFileName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [position, setPosition] = useState('');
   const [context, setContext] = useState('');
-  const [consent, setConsent] = useState(true);
-  const [secretKeyInput, setSecretKeyInput] = useState('');
-  const [keyError, setKeyError] = useState('');
-  const [verifying, setVerifying] = useState(false);
-  const [copied, setCopied] = useState(false);
-  const [refCode, setRefCode] = useState('');
+  const [notes, setNotes] = useState('');
 
-  const handleStep1Submit = (e: React.FormEvent) => {
+  // Uploaded file state
+  const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+  const [fileName, setFileName] = useState('');
+  const [fileSize, setFileSize] = useState(0);
+  const [fileType, setFileType] = useState('');
+  const [fileDataUrl, setFileDataUrl] = useState<string>('');
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Status Check lookup state
+  const [statusSearchCode, setStatusSearchCode] = useState('');
+  const [statusResult, setStatusResult] = useState<VerificationSubmission | null>(null);
+  const [statusSearched, setStatusSearched] = useState(false);
+
+  // Submitted confirmation state
+  const [isSubmitted, setIsSubmitted] = useState(false);
+  const [submittedRefCode, setSubmittedRefCode] = useState('');
+  const [copiedRef, setCopiedRef] = useState(false);
+
+  // File processing and validation
+  const handleProcessFile = (file: File) => {
+    setUploadError(null);
+
+    if (file.size > MAX_FILE_SIZE) {
+      setUploadError(`File is too large (${formatBytes(file.size)}). Maximum supported file size is 25 MB.`);
+      return;
+    }
+
+    const ext = '.' + file.name.split('.').pop()?.toLowerCase();
+    const isAccepted =
+      ACCEPTED_EXTENSIONS.includes(ext) ||
+      file.type.includes('pdf') ||
+      file.type.includes('image') ||
+      file.type.includes('word') ||
+      file.type.includes('officedocument');
+
+    if (!isAccepted) {
+      setUploadError(
+        `Unsupported file format (${ext || file.type}). Please attach a document in PDF, Word (.docx), or image (.png, .jpg) format.`
+      );
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      setUploadedFile(file);
+      setFileName(file.name);
+      setFileSize(file.size);
+      setFileType(file.type || 'application/pdf');
+      setFileDataUrl(reader.result as string);
+    };
+    reader.onerror = () => {
+      setUploadError('Failed to read selected file. Please ensure you have read permission.');
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleDragOver = (e: DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      handleProcessFile(e.dataTransfer.files[0]);
+    }
+  };
+
+  const handleFileInputChange = (e: ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      handleProcessFile(e.target.files[0]);
+    }
+  };
+
+  const handleRemoveFile = () => {
+    setUploadedFile(null);
+    setFileName('');
+    setFileSize(0);
+    setFileType('');
+    setFileDataUrl('');
+    setUploadError(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  // Submit document for company verification
+  const handleSubmitVerification = (e: React.FormEvent) => {
     e.preventDefault();
     if (!candidateName.trim() || !email.trim()) return;
+
+    if (!fileName) {
+      setUploadError('Please attach your offer letter or document before submitting.');
+      return;
+    }
+
     const generatedRef = `WBA-VER-2026-${Math.floor(100000 + Math.random() * 900000)}`;
-    setRefCode(generatedRef);
-    setStep('enter_key');
+
+    // Store in verification store for the Admin Portal
+    verificationStore.add({
+      refCode: generatedRef,
+      candidateName: candidateName.trim(),
+      email: email.trim(),
+      phone: phone.trim() || undefined,
+      position: position.trim() || undefined,
+      fileName: fileName,
+      fileSize: fileSize || 1024000,
+      fileType: fileType || 'application/pdf',
+      fileDataUrl: fileDataUrl || undefined,
+      agencyOrConsultant: context.trim() || undefined,
+      notes: notes.trim() || undefined,
+      status: 'pending_review',
+    });
+
+    setSubmittedRefCode(generatedRef);
+    setIsSubmitted(true);
     window.scrollTo({ top: 120, behavior: 'smooth' });
   };
 
-  const handleKeySubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    setKeyError('');
-    const clean = secretKeyInput.replace(/\D/g, '');
-    if (clean.length !== 10) {
-      setKeyError('The secret verification key must be exactly 10 digits.');
-      return;
-    }
-    setVerifying(true);
-    setTimeout(() => {
-      setVerifying(false);
-      if (AUTHORIZED_KEYS.includes(clean) || clean.startsWith('9') || clean.startsWith('5')) {
-        setStep('verified');
-        window.scrollTo({ top: 120, behavior: 'smooth' });
-      } else {
-        setKeyError(
-          'Invalid 10-digit Key: The code entered was not found in our authorization records. Please contact your recruitment agency or We Build Australia HR.'
-        );
-      }
-    }, 600);
+  const copyRefCode = () => {
+    navigator.clipboard.writeText(submittedRefCode);
+    setCopiedRef(true);
+    setTimeout(() => setCopiedRef(false), 2000);
   };
 
-  const copyText = (val: string) => {
-    navigator.clipboard.writeText(val);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+  const handleDownloadReceipt = () => {
+    const receiptContent = `======================================================================
+WE BUILD AUSTRALIA PTY LTD (ACN 168 514 829)
+DOCUMENT VERIFICATION LODGEMENT RECEIPT
+======================================================================
+
+Tracking Reference Code : ${submittedRefCode}
+Date & Time Lodged      : ${new Date().toLocaleString('en-AU')}
+Candidate Full Name     : ${candidateName}
+Reply-To Email Address  : ${email}
+Contact Phone Number    : ${phone || 'Not provided'}
+Position / Role Title   : ${position || 'General Verification'}
+Attached Document       : ${fileName} (${formatBytes(fileSize)})
+Agency / Referral Source: ${context || 'Direct Submission'}
+
+OFFICIAL COMPANY NOTICE:
+Your document has been securely registered with the We Build Australia
+HR Directorate. Our verification team will review this document against
+official New South Wales operational registers and project records.
+
+An official verification determination will be sent directly to your
+registered email address (${email}) from info@webuildgroup.company within
+1 to 2 business days.
+
+Company Contact:
+We Build Australia Pty Ltd
+Level 3, 20-22 Macquarie Street, Parramatta NSW 2150
+Phone: +61 420 127 424 | Email: info@webuildgroup.company
+NSW Fair Trading Builder Licence: #274910C
+======================================================================`;
+
+    const blob = new Blob([receiptContent], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${submittedRefCode}_Lodgement_Receipt.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  // Status check lookup
+  const handleCheckStatus = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!statusSearchCode.trim()) return;
+    const found = verificationStore.getByRef(statusSearchCode);
+    setStatusResult(found || null);
+    setStatusSearched(true);
   };
 
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 py-12">
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-start">
-        {/* Left Editorial Guidance */}
-        <div className="lg:col-span-5 space-y-6">
-          <p className="eyebrow">
-            <span className="dot"></span>RECRUITMENT / DOCUMENT AUTHENTICATION
-          </p>
-          <h1 className="text-3xl sm:text-5xl font-normal font-serif text-[#1d352c] leading-tight">
-            Job letter &amp;
-            <br />
-            <em>verification portal.</em>
-          </h1>
-          <p className="text-sm leading-relaxed text-[#68746c]">
-            We Build Australia Pty Ltd uses an authorized 10-digit security key system to authenticate official employment offer letters and protect candidates from counterfeit documentation.
-          </p>
+      {/* Header */}
+      <div className="mb-10 text-left">
+        <p className="eyebrow">
+          <span className="dot"></span>RECRUITMENT &amp; DOCUMENT AUTHENTICATION
+        </p>
+        <h1 className="text-3xl sm:text-5xl font-normal font-serif text-[#1d352c] mt-2 mb-3 leading-tight">
+          Job letter &amp; contract
+          <br />
+          <em>verification portal.</em>
+        </h1>
+        <p className="text-sm leading-relaxed text-[#68746c] max-w-3xl">
+          We Build Australia Pty Ltd provides direct verification for employment offer letters, trade engagements, and subcontractor credentials. Upload your document with your contact details below, and our senior HR Directorate will review the document and send an official determination directly to your email.
+        </p>
+      </div>
 
-          <div className="p-5 bg-white border border-[#d4dbd4] rounded-lg shadow-sm space-y-3">
-            <strong className="text-xs uppercase font-mono tracking-wider text-[#1d352c] block">
-              Two-Step Authentication Process:
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-start">
+        {/* Left Informational Sidebar */}
+        <div className="lg:col-span-5 space-y-6">
+          <div className="p-5 bg-white border border-[#d4dbd4] rounded-xl shadow-xs space-y-3.5">
+            <strong className="text-xs uppercase font-mono tracking-wider text-[#1d352c] block font-bold">
+              How Company Verification Works:
             </strong>
-            <div className="space-y-2.5 text-xs text-[#24382f]">
-              <div className="flex items-center gap-2">
-                <span className="w-5 h-5 rounded-full bg-[#1d352c] text-white flex items-center justify-center text-[10px] font-bold shrink-0">
+
+            <div className="space-y-3 text-xs text-[#24382f]">
+              <div className="flex items-start gap-2.5">
+                <span className="w-5 h-5 rounded-full bg-[#1d352c] text-white flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5">
                   1
                 </span>
-                <span>Enter exact registered candidate details and offer letter PDF</span>
+                <div>
+                  <strong className="block text-[#1d352c]">Upload Your Document &amp; Email</strong>
+                  <span className="text-[#68746c]">
+                    Provide your full legal name, the email address where you want to receive our response, and attach your letter (PDF, Word, or image).
+                  </span>
+                </div>
               </div>
-              <div className="flex items-center gap-2">
-                <span className="w-5 h-5 rounded-full bg-[#d97706] text-white flex items-center justify-center text-[10px] font-bold shrink-0">
+
+              <div className="flex items-start gap-2.5">
+                <span className="w-5 h-5 rounded-full bg-[#d32f2f] text-white flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5">
                   2
                 </span>
-                <span>Enter the 10-digit Secret Key provided by your agency</span>
+                <div>
+                  <strong className="block text-[#1d352c]">HR Directorate Authentication</strong>
+                  <span className="text-[#68746c]">
+                    Our leadership cross-references the offer with official project staffing registers, NSW licences, and authorized signatories.
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-2.5">
+                <span className="w-5 h-5 rounded-full bg-emerald-600 text-white flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5">
+                  3
+                </span>
+                <div>
+                  <strong className="block text-[#1d352c]">Official Email Determination</strong>
+                  <span className="text-[#68746c]">
+                    You receive an official verification response sent directly to your email from <code>info@webuildgroup.company</code>.
+                  </span>
+                </div>
               </div>
             </div>
           </div>
 
-          <div className="p-4 bg-[#fbfbf9] border border-[#d4dbd4] rounded text-xs text-[#68746c] space-y-1">
-            <strong className="text-[#1d352c] block font-sans">Official Guarantee</strong>
-            <p>
-              We Build Australia Pty Ltd never charges application fees, visa fees, or equipment deposits. Contact our Parramatta office at <strong>+61 420 127 424</strong> or email <strong>info@webuildgroup.company</strong> if you suspect fraudulent contact.
+          {/* Guarantee & Anti-Fraud Notice */}
+          <div className="p-4 bg-[#fbfbf9] border border-[#d4dbd4] rounded-xl text-xs text-[#68746c] space-y-1.5">
+            <strong className="text-[#1d352c] block font-sans font-bold flex items-center gap-1.5">
+              <ShieldCheck size={15} className="text-emerald-700" />
+              Official Guarantee &amp; Anti-Fraud Protection
+            </strong>
+            <p className="leading-relaxed">
+              We Build Australia Pty Ltd never charges candidate application fees, visa deposits, or background check costs. All official company communications come exclusively from <strong>info@webuildgroup.company</strong> or telephone <strong>+61 420 127 424</strong>.
             </p>
           </div>
+
+          {/* Check Existing Reference Code Status */}
+          <div className="p-5 bg-white border border-[#d4dbd4] rounded-xl shadow-xs space-y-3">
+            <strong className="text-xs font-mono uppercase text-[#1d352c] block font-bold flex items-center gap-1.5">
+              <Search size={14} className="text-[#d32f2f]" />
+              Check Existing Verification Status
+            </strong>
+            <p className="text-xs text-[#68746c]">
+              Already lodged a document? Enter your tracking reference code below:
+            </p>
+
+            <form onSubmit={handleCheckStatus} className="space-y-2">
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={statusSearchCode}
+                  onChange={(e) => setStatusSearchCode(e.target.value)}
+                  placeholder="e.g. WBA-VER-2026-948201"
+                  className="flex-1 bg-[#f6f6f1] border border-[#d4dbd4] rounded-lg px-3 py-2 text-xs font-mono text-[#24382f] focus:outline-none focus:border-[#1d352c]"
+                />
+                <button
+                  type="submit"
+                  className="px-3 py-2 rounded-lg bg-[#1d352c] hover:bg-[#14241e] text-white text-xs font-bold transition-colors cursor-pointer"
+                >
+                  Check
+                </button>
+              </div>
+            </form>
+
+            {statusSearched && (
+              <div className="pt-2 text-xs font-mono border-t border-slate-100">
+                {statusResult ? (
+                  <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg space-y-1">
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">Candidate:</span>
+                      <strong className="text-slate-800">{statusResult.candidateName}</strong>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">Document:</span>
+                      <strong className="text-slate-800 truncate max-w-[150px]">{statusResult.fileName}</strong>
+                    </div>
+                    <div className="flex justify-between items-center pt-1">
+                      <span className="text-slate-500">Current Status:</span>
+                      {statusResult.status === 'verified' ? (
+                        <span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-bold text-[10px]">
+                          ✓ VERIFIED AUTHENTIC
+                        </span>
+                      ) : statusResult.status === 'flagged' ? (
+                        <span className="px-2 py-0.5 rounded bg-red-100 text-red-800 font-bold text-[10px]">
+                          ✗ FLAGGED SUSPICIOUS
+                        </span>
+                      ) : (
+                        <span className="px-2 py-0.5 rounded bg-amber-100 text-amber-800 font-bold text-[10px]">
+                          ⏳ UNDER REVIEW BY HR
+                        </span>
+                      )}
+                    </div>
+                    {statusResult.adminReplyNotes && (
+                      <div className="text-[11px] text-slate-600 pt-1 font-sans">
+                        <strong>HR Note:</strong> {statusResult.adminReplyNotes}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="p-2.5 bg-red-50 border border-red-200 rounded text-red-800 text-[11px]">
+                    No submission record found for tracking code <strong>{statusSearchCode}</strong>. Please ensure the reference is entered correctly.
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Discrete Link to Staff / Admin Portal */}
+          {onGoToAdmin && (
+            <div className="pt-2 text-center">
+              <button
+                type="button"
+                onClick={onGoToAdmin}
+                className="text-xs text-slate-500 hover:text-slate-800 flex items-center justify-center gap-1.5 mx-auto font-mono hover:underline cursor-pointer"
+              >
+                <Lock size={12} className="text-slate-400" />
+                <span>We Build Australia Staff Portal (Password Protected) →</span>
+              </button>
+            </div>
+          )}
         </div>
 
-        {/* Right Interactive Card */}
-        <div className="lg:col-span-7 bg-white border border-[#d4dbd4] rounded-2xl p-6 sm:p-8 shadow-md">
-          {/* STEP 1: FORM */}
-          {step === 'submit' && (
-            <form onSubmit={handleStep1Submit} className="space-y-4">
-              <span className="px-2.5 py-1 rounded bg-[#e8f0ea] text-[#1d352c] text-[10px] font-mono font-bold">
-                STEP 1 OF 2
-              </span>
+        {/* Right Main Interactive Form */}
+        <div className="lg:col-span-7 bg-white border border-[#d4dbd4] rounded-2xl p-6 sm:p-8 shadow-sm">
+          {!isSubmitted ? (
+            <form onSubmit={handleSubmitVerification} className="space-y-4">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                <span className="px-2.5 py-1 rounded bg-[#e8f0ea] text-[#1d352c] text-[10px] font-mono font-bold">
+                  DOCUMENT LODGEMENT FORM
+                </span>
+                <span className="text-[11px] font-mono text-[#68746c]">
+                  NSW Fair Trading Licence #274910C
+                </span>
+              </div>
+
               <h2 className="text-xl font-bold text-[#1d352c] font-sans">
-                Candidate &amp; Document Details
+                Submit Document for Official Verification
               </h2>
               <p className="text-xs text-[#68746c]">
-                Please enter your registered details to verify your We Build Australia offer letter.
+                Please enter your registered details, the email where company HR should send your verification response, and attach your document.
               </p>
 
+              {/* Candidate Name */}
               <div>
                 <label className="block text-xs font-semibold text-[#1d352c] mb-1">
                   Candidate Full Name *
@@ -144,44 +423,163 @@ export function VerificationView() {
                   required
                   value={candidateName}
                   onChange={(e) => setCandidateName(e.target.value)}
-                  placeholder="Enter full legal name on letter"
+                  placeholder="Enter your full legal name as written on the letter"
                   className="w-full bg-[#f6f6f1] border border-[#d4dbd4] rounded-lg p-2.5 text-xs text-[#24382f] focus:outline-none focus:border-[#1d352c]"
                 />
               </div>
 
+              {/* Email Where Company Will Reply */}
               <div>
                 <label className="block text-xs font-semibold text-[#1d352c] mb-1">
-                  Registered Email Address *
+                  Email Address (Where you need to get reply from company) *
                 </label>
-                <input
-                  type="email"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="your.email@address.com"
-                  className="w-full bg-[#f6f6f1] border border-[#d4dbd4] rounded-lg p-2.5 text-xs text-[#24382f] focus:outline-none focus:border-[#1d352c]"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-[#1d352c] mb-1">
-                  Offer Letter (PDF) *
-                </label>
-                <div className="border border-dashed border-[#68746c] bg-[#f6f6f1] p-4 rounded-lg text-center cursor-pointer">
-                  <Upload size={20} className="mx-auto text-[#1d352c] mb-1" />
-                  <span className="text-xs font-semibold text-[#1d352c] block">
-                    {fileName || 'Click to attach offer letter PDF'}
-                  </span>
+                <div className="relative">
+                  <Mail size={15} className="absolute left-3 top-3 text-[#d32f2f]" />
                   <input
-                    type="file"
-                    accept=".pdf,application/pdf"
+                    type="email"
                     required
-                    onChange={(e) => setFileName(e.target.files?.[0]?.name || 'We_Build_Offer_Letter.pdf')}
-                    className="w-full text-xs text-[#68746c] mt-1"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="your.email@example.com"
+                    className="w-full bg-[#f6f6f1] border border-[#d4dbd4] rounded-lg pl-9 pr-3 py-2.5 text-xs text-[#24382f] focus:outline-none focus:border-[#1d352c]"
+                  />
+                </div>
+                <span className="text-[10px] text-slate-500 font-mono mt-1 block">
+                  Our HR Directorate will send the formal verification determination to this email from info@webuildgroup.company
+                </span>
+              </div>
+
+              {/* Phone & Position in 2 columns */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-[#1d352c] mb-1">
+                    Contact Phone Number (Optional)
+                  </label>
+                  <div className="relative">
+                    <Phone size={14} className="absolute left-3 top-3 text-slate-400" />
+                    <input
+                      type="tel"
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                      placeholder="e.g. 0420 127 424"
+                      className="w-full bg-[#f6f6f1] border border-[#d4dbd4] rounded-lg pl-9 pr-3 py-2.5 text-xs text-[#24382f] focus:outline-none focus:border-[#1d352c]"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-[#1d352c] mb-1">
+                    Position or Role Title (Optional)
+                  </label>
+                  <input
+                    type="text"
+                    value={position}
+                    onChange={(e) => setPosition(e.target.value)}
+                    placeholder="e.g. Senior Site Manager, Project Engineer"
+                    className="w-full bg-[#f6f6f1] border border-[#d4dbd4] rounded-lg p-2.5 text-xs text-[#24382f] focus:outline-none focus:border-[#1d352c]"
                   />
                 </div>
               </div>
 
+              {/* DOCUMENT UPLOAD DROPZONE */}
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-semibold text-[#1d352c]">
+                    Upload Offer Letter or Contract Document *
+                  </label>
+                  <span className="text-[10px] font-mono text-[#68746c]">
+                    Max 25 MB
+                  </span>
+                </div>
+
+                {/* Hidden input element */}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".pdf,.png,.jpg,.jpeg,.webp,.docx,.doc,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/*"
+                  onChange={handleFileInputChange}
+                  className="hidden"
+                  aria-label="Upload document file"
+                />
+
+                {!fileName ? (
+                  <div
+                    onDragOver={handleDragOver}
+                    onDragLeave={handleDragLeave}
+                    onDrop={handleDrop}
+                    onClick={() => fileInputRef.current?.click()}
+                    className={`border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-all ${
+                      isDragging
+                        ? 'border-[#1d352c] bg-emerald-50/50 scale-[1.01]'
+                        : 'border-slate-300 hover:border-[#1d352c] bg-[#f9faf9] hover:bg-slate-50'
+                    }`}
+                  >
+                    <div className="w-12 h-12 rounded-full bg-slate-100 mx-auto flex items-center justify-center text-[#1d352c] mb-2.5 shadow-2xs">
+                      <Upload size={22} />
+                    </div>
+                    <span className="text-xs font-bold text-[#1d352c] block mb-0.5">
+                      Drag &amp; drop your offer letter here, or{' '}
+                      <span className="text-[#c5160e] underline">browse files</span>
+                    </span>
+                    <p className="text-[11px] text-slate-500">
+                      Supports PDF files, Word contracts (.docx), and scan images (.png, .jpg) up to 25 MB
+                    </p>
+                  </div>
+                ) : (
+                  <div className="p-3.5 bg-emerald-50/60 border border-emerald-300 rounded-xl flex items-center justify-between gap-3 animate-in fade-in duration-200">
+                    <div className="flex items-center gap-3 overflow-hidden">
+                      <div className="w-10 h-10 rounded-lg bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-2xs">
+                        {fileType.includes('image') ? (
+                          <FileImage size={20} />
+                        ) : (
+                          <FileText size={20} />
+                        )}
+                      </div>
+                      <div className="truncate">
+                        <strong className="text-xs text-emerald-950 block truncate font-sans">
+                          {fileName}
+                        </strong>
+                        <div className="flex items-center gap-2 text-[10px] font-mono text-emerald-800">
+                          <span>{formatBytes(fileSize)}</span>
+                          <span>•</span>
+                          <span className="uppercase">{fileName.split('.').pop() || 'PDF'}</span>
+                          <span>•</span>
+                          <span className="text-emerald-700 flex items-center gap-0.5 font-bold">
+                            <Check size={11} /> Ready for submission
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        className="px-2.5 py-1 text-[11px] rounded bg-white hover:bg-emerald-100 text-emerald-900 border border-emerald-200 font-semibold transition-colors cursor-pointer"
+                      >
+                        Change
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleRemoveFile}
+                        className="p-1 text-slate-400 hover:text-red-600 rounded transition-colors cursor-pointer"
+                        title="Remove file"
+                      >
+                        <Trash2 size={15} />
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {uploadError && (
+                  <div className="mt-2 p-2.5 bg-red-50 border border-red-200 rounded-lg text-xs text-red-700 flex items-center gap-2">
+                    <AlertCircle size={15} className="shrink-0 text-red-600" />
+                    <span>{uploadError}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Recruitment Agency / Origin */}
               <div>
                 <label className="block text-xs font-semibold text-[#1d352c] mb-1">
                   Recruitment Agency or Consultant Name (Optional)
@@ -190,7 +588,21 @@ export function VerificationView() {
                   type="text"
                   value={context}
                   onChange={(e) => setContext(e.target.value)}
-                  placeholder="e.g. Hays, Kelly, or Direct Senior Leadership inquiry"
+                  placeholder="e.g. Hays Sydney, Kelly Services, Seek, or Direct Contact"
+                  className="w-full bg-[#f6f6f1] border border-[#d4dbd4] rounded-lg p-2.5 text-xs text-[#24382f] focus:outline-none focus:border-[#1d352c]"
+                />
+              </div>
+
+              {/* Notes / Questions */}
+              <div>
+                <label className="block text-xs font-semibold text-[#1d352c] mb-1">
+                  Additional Notes or Questions for HR (Optional)
+                </label>
+                <textarea
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  rows={2}
+                  placeholder="Any details about your start date, remuneration, or suspected fraudulent contact..."
                   className="w-full bg-[#f6f6f1] border border-[#d4dbd4] rounded-lg p-2.5 text-xs text-[#24382f] focus:outline-none focus:border-[#1d352c]"
                 />
               </div>
@@ -198,131 +610,97 @@ export function VerificationView() {
               <div className="pt-2">
                 <button
                   type="submit"
-                  className="w-full py-3 rounded-lg bg-[#1d352c] hover:bg-[#14241e] text-white text-xs font-bold transition-colors cursor-pointer flex items-center justify-center gap-2"
+                  className="w-full py-3 rounded-lg bg-[#1d352c] hover:bg-[#14241e] text-white text-xs font-bold transition-colors cursor-pointer flex items-center justify-center gap-2 shadow-xs"
                 >
-                  <span>Continue to Step 2 (Enter Secret Key)</span>
+                  <ShieldCheck size={16} />
+                  <span>Submit Document for Company Verification</span>
                   <ArrowUpRight size={14} />
                 </button>
               </div>
             </form>
-          )}
-
-          {/* STEP 2: SECRET KEY */}
-          {step === 'enter_key' && (
-            <form onSubmit={handleKeySubmit} className="space-y-4">
-              <span className="px-2.5 py-1 rounded bg-[#fef3c7] text-[#92400e] text-[10px] font-mono font-bold">
-                STEP 2 OF 2 • AUTHORIZATION
-              </span>
-              <h2 className="text-xl font-bold text-[#1d352c] font-sans">
-                Enter 10-Digit Secret Verification Key
-              </h2>
-
-              <div className="p-4 bg-[#eff6ff] border border-[#3b82f6] rounded-lg text-xs space-y-1">
-                <strong className="text-[#1e40af] flex items-center gap-1.5 font-sans">
-                  <KeyRound size={15} /> Agency Security Key Dispatch Notice
-                </strong>
-                <p className="text-[#1e3a8a] leading-relaxed">
-                  A unique 10-digit security key has been provided to the authorized recruitment agency or consultant managing your application. Enter it below to unlock verified status.
-                </p>
-                <p className="text-[11px] text-[#2563eb] pt-1">
-                  Demo Authorized Key for testing: <code className="font-mono font-bold">9482017365</code>
-                </p>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-[#1d352c] mb-1">
-                  10-Digit Secret Key *
-                </label>
-                <input
-                  type="text"
-                  maxLength={10}
-                  required
-                  value={secretKeyInput}
-                  onChange={(e) => setSecretKeyInput(e.target.value.replace(/\D/g, ''))}
-                  placeholder="9482017365"
-                  className="w-full bg-[#f6f6f1] border-2 border-[#1d352c] rounded-lg p-3 text-center text-2xl font-mono font-bold tracking-widest text-[#1d352c] focus:outline-none"
-                />
-              </div>
-
-              {keyError && (
-                <div className="p-3 bg-red-50 border border-red-300 rounded text-xs text-red-800 flex items-center gap-2">
-                  <AlertCircle size={15} className="shrink-0" />
-                  <span>{keyError}</span>
-                </div>
-              )}
-
-              <div className="pt-2 flex items-center justify-between gap-3">
-                <button
-                  type="button"
-                  onClick={() => setStep('submit')}
-                  className="text-xs text-[#68746c] hover:text-[#1d352c] underline cursor-pointer"
-                >
-                  ← Edit details
-                </button>
-
-                <button
-                  type="submit"
-                  disabled={verifying || secretKeyInput.length !== 10}
-                  className="py-2.5 px-6 rounded-lg bg-[#1d352c] hover:bg-[#14241e] disabled:opacity-50 text-white text-xs font-bold transition-colors cursor-pointer"
-                >
-                  {verifying ? 'Authenticating...' : 'Verify Secret Key'}
-                </button>
-              </div>
-            </form>
-          )}
-
-          {/* STEP 3: VERIFIED CERTIFICATE */}
-          {step === 'verified' && (
-            <div className="space-y-4 text-xs font-mono">
+          ) : (
+            /* LODGEMENT CONFIRMATION CARD */
+            <div className="space-y-5 text-xs font-mono">
               <div className="flex items-center justify-between border-b border-[#d4dbd4] pb-3">
                 <span className="px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 text-xs font-bold border border-emerald-300 flex items-center gap-1.5">
-                  <BadgeCheck size={16} /> REAL &amp; OFFICIALLY VERIFIED
+                  <CheckCircle2 size={16} /> DOCUMENT SUCCESSFULLY LODGED
                 </span>
-                <span className="text-[#68746c]">Key: {secretKeyInput}</span>
+                <span className="text-[#68746c]">{new Date().toLocaleDateString('en-AU')}</span>
               </div>
 
-              <div className="space-y-2 py-2">
-                <span className="text-[10px] text-[#68746c] uppercase block">
-                  We Build Australia Pty Ltd • Official Verification Notice
+              <div className="space-y-1.5">
+                <span className="text-[10px] text-[#68746c] uppercase block font-bold">
+                  We Build Australia Pty Ltd • Directorate Verification Queue
                 </span>
                 <h3 className="text-2xl font-serif text-[#1d352c] font-normal font-sans">
                   {candidateName}
                 </h3>
                 <p className="text-[#68746c] font-sans">
-                  Registered: {email} • Document: <strong>{fileName || 'Offer_Letter.pdf'}</strong>
+                  Reply will be sent to: <strong className="text-blue-700">{email}</strong>
                 </p>
               </div>
 
-              <div className="p-4 bg-[#f0fdf4] border border-[#bbf7d0] rounded-lg text-xs leading-relaxed text-[#1f2937] font-sans">
-                <strong className="text-[#065f46] block mb-1">Official HR Directorate Authentication:</strong>
-                We Build Australia Pty Ltd certifies that the 10-digit secret key <code>{secretKeyInput}</code> is genuine and registered under tracking code <strong>{refCode}</strong>. The offer letter corresponds to an authorized position in our New South Wales operations.
+              <div className="p-4 bg-[#f0fdf4] border border-[#bbf7d0] rounded-xl text-xs leading-relaxed text-[#1f2937] font-sans space-y-2">
+                <strong className="text-[#065f46] block text-sm">
+                  What Happens Next?
+                </strong>
+                <p>
+                  Your document <strong>{fileName}</strong> has been logged into our secure Directorate verification register under Tracking Reference <strong>{submittedRefCode}</strong>.
+                </p>
+                <p>
+                  Our senior HR team in Parramatta will review the document against our official project contracts and authorized NSW directorate signatories. You will receive an official verification determination directly at <strong>{email}</strong> from <strong>info@webuildgroup.company</strong> within 1–2 business days.
+                </p>
               </div>
 
-              <div className="grid grid-cols-2 gap-3 p-3 bg-[#f6f6f1] rounded border border-[#d4dbd4] text-[11px]">
+              {/* Reference Box */}
+              <div className="grid grid-cols-2 gap-3 p-3.5 bg-[#f6f6f1] rounded-xl border border-[#d4dbd4] text-[11px]">
                 <div>
-                  <span className="text-[#68746c] block">Tracking Reference:</span>
-                  <strong className="text-[#1d352c]">{refCode}</strong>
+                  <span className="text-[#68746c] block">Tracking Reference Code:</span>
+                  <strong className="text-[#1d352c] text-sm">{submittedRefCode}</strong>
                 </div>
                 <div>
-                  <span className="text-[#68746c] block">Authentication Date:</span>
-                  <strong className="text-[#1d352c]">{new Date().toLocaleDateString('en-AU')}</strong>
+                  <span className="text-[#68746c] block">Attached Document:</span>
+                  <strong className="text-[#1d352c] truncate block">{fileName}</strong>
                 </div>
               </div>
 
-              <div className="pt-3 flex items-center gap-3">
+              <div className="pt-2 flex flex-wrap items-center gap-3">
                 <button
                   type="button"
-                  onClick={() => window.print()}
-                  className="px-4 py-2 rounded bg-[#1d352c] text-white text-xs font-semibold cursor-pointer"
+                  onClick={copyRefCode}
+                  className="px-3.5 py-2 rounded-lg bg-white border border-[#d4dbd4] text-[#1d352c] text-xs font-semibold cursor-pointer flex items-center gap-1.5"
                 >
-                  Print Certificate
+                  {copiedRef ? <Check size={14} className="text-emerald-600" /> : <Copy size={14} />}
+                  <span>{copiedRef ? 'Copied Reference!' : 'Copy Tracking Reference'}</span>
                 </button>
+
                 <button
                   type="button"
-                  onClick={() => copyText(refCode)}
-                  className="px-3 py-2 rounded bg-white border border-[#d4dbd4] text-[#1d352c] text-xs font-semibold cursor-pointer"
+                  onClick={handleDownloadReceipt}
+                  className="px-3.5 py-2 rounded-lg bg-[#1d352c] hover:bg-[#14241e] text-white text-xs font-semibold cursor-pointer flex items-center gap-1.5"
                 >
-                  {copied ? 'Copied Reference!' : 'Copy Reference'}
+                  <Download size={13} />
+                  <span>Download Lodgement Receipt</span>
+                </button>
+              </div>
+
+              <div className="pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsSubmitted(false);
+                    setCandidateName('');
+                    setEmail('');
+                    setPhone('');
+                    setPosition('');
+                    setFileName('');
+                    setUploadedFile(null);
+                    setFileDataUrl('');
+                    setNotes('');
+                  }}
+                  className="text-xs text-slate-500 hover:text-slate-800 underline cursor-pointer"
+                >
+                  + Submit another document for verification
                 </button>
               </div>
             </div>

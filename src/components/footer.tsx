@@ -8,6 +8,7 @@ interface FooterProps {
   onGoToProjects?: () => void;
   onGoToVerify?: () => void;
   onGoToVault?: () => void;
+  onGoToAdmin?: () => void;
 }
 
 export function Footer({
@@ -16,6 +17,7 @@ export function Footer({
   onGoToProjects,
   onGoToVerify,
   onGoToVault,
+  onGoToAdmin,
 }: FooterProps) {
   return (
     <footer className="site-footer">
@@ -99,6 +101,9 @@ export function Footer({
         </button>
         <button type="button" onClick={onGoToCareers}>
           NSW positions
+        </button>
+        <button type="button" onClick={onGoToAdmin} className="text-[#d32f2f] font-semibold hover:underline cursor-pointer">
+          Staff sign in (Admin)
         </button>
       </div>
 

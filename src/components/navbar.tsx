@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { Search, Grid, Menu, X, ShieldCheck, ChevronDown, Globe, Phone, Mail } from 'lucide-react';
+import { Search, Grid, Menu, X, ShieldCheck, ChevronDown, Globe, Phone, Mail, Lock } from 'lucide-react';
 import { WebuildSwirl } from './webuild-swirl';
 
-export type MainNavTab = 'home' | 'services' | 'projects' | 'careers' | 'verify' | 'vault';
+export type MainNavTab = 'home' | 'services' | 'projects' | 'careers' | 'verify' | 'vault' | 'admin';
 
 interface NavbarProps {
   activeTab: MainNavTab;
@@ -140,6 +140,22 @@ export function Navbar({ activeTab, setActiveTab, onSearch }: NavbarProps) {
             <Mail size={13} className="text-[#d32f2f]" />
             <span>info@webuildgroup.company</span>
           </a>
+
+          <div className="h-4 w-px bg-slate-200 hidden lg:block"></div>
+
+          <button
+            type="button"
+            onClick={() => handleNavClick('admin')}
+            className={`hidden lg:inline-flex items-center gap-1.5 text-xs font-mono font-bold transition-colors pl-1 cursor-pointer ${
+              activeTab === 'admin'
+                ? 'text-[#d32f2f]'
+                : 'text-slate-600 hover:text-[#d32f2f]'
+            }`}
+            title="Staff & Admin Portal"
+          >
+            <Lock size={12} className="text-[#d32f2f]" />
+            <span>Admin Portal</span>
+          </button>
         </form>
       </div>
 
@@ -329,6 +345,14 @@ export function Navbar({ activeTab, setActiveTab, onSearch }: NavbarProps) {
               <Mail size={14} className="text-[#d32f2f]" />
               <span>info@webuildgroup.company</span>
             </a>
+            <button
+              type="button"
+              onClick={() => handleNavClick('admin')}
+              className="flex items-center gap-2 py-2 px-3 rounded bg-red-50 text-[#d32f2f] font-bold mt-1"
+            >
+              <Lock size={14} className="text-[#d32f2f]" />
+              <span>STAFF ADMIN PORTAL</span>
+            </button>
           </div>
         </nav>
       )}
