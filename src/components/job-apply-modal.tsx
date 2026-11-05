@@ -16,7 +16,9 @@ import {
   MapPin,
   Check,
   Printer,
+  QrCode,
 } from 'lucide-react';
+import QRCode from 'qrcode';
 import { JobOpening, WE_BUILD_AUSTRALIA_PROFILE } from '@/data/webuild-australia';
 import { applicationStore, JobApplication } from '@/lib/application-store';
 
@@ -59,6 +61,7 @@ export function JobApplyModal({
 
   const [submitting, setSubmitting] = useState(false);
   const [submittedApp, setSubmittedApp] = useState<JobApplication | null>(null);
+  const [appQrUrl, setAppQrUrl] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
 
   if (!isOpen) return null;
@@ -130,6 +133,23 @@ export function JobApplyModal({
       if (onApplicationSubmitted) {
         onApplicationSubmitted(newApp);
       }
+
+      const origin = typeof window !== 'undefined' ? window.location.origin : '';
+      const isLocal = origin.includes('localhost') || origin.includes('127.0.0.1') || origin.includes('0.0.0.0');
+      let targetBase = origin;
+      if (origin.includes('ais-dev-')) {
+        targetBase = origin.replace('ais-dev-', 'ais-pre-');
+      } else if (isLocal) {
+        targetBase = 'https://ais-pre-ucblzge2fhhoifdaarjri7-411900850859.asia-southeast1.run.app';
+      }
+      const statusUrl = `${targetBase}/#verify-status?ref=${newApp.referenceNumber}`;
+
+      void QRCode.toDataURL(statusUrl, {
+        width: 240,
+        margin: 1,
+        color: { dark: '#111827', light: '#ffffff' },
+        errorCorrectionLevel: 'M',
+      }).then(setAppQrUrl);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Could not submit application. Please try again.');
     } finally {
@@ -139,6 +159,7 @@ export function JobApplyModal({
 
   const handleReset = () => {
     setSubmittedApp(null);
+    setAppQrUrl('');
     setCandidateName('');
     setEmail('');
     setPhone('');
@@ -225,6 +246,40 @@ export function JobApplyModal({
               <div>
                 <span className="text-slate-500 block text-[10px]">Availability:</span>
                 <span className="text-slate-200">{submittedApp.availableFrom}</span>
+              </div>
+            </div>
+
+            {/* QR Code to Track Application Status */}
+            <div className="p-4 bg-slate-950/80 border border-slate-800 rounded-xl flex flex-col sm:flex-row items-center gap-4 text-left">
+              {appQrUrl ? (
+                <img
+                  src={appQrUrl}
+                  alt={`Scan to check application status of ${submittedApp.referenceNumber}`}
+                  className="w-24 h-24 shrink-0 bg-white p-1 rounded-lg"
+                />
+              ) : (
+                <div className="w-24 h-24 shrink-0 bg-slate-800 rounded-lg flex items-center justify-center text-[10px] text-slate-400">
+                  Generating QR...
+                </div>
+              )}
+              <div className="space-y-1 font-sans">
+                <span className="text-xs font-bold text-white flex items-center gap-1.5 font-mono">
+                  <QrCode size={13} className="text-[#d32f2f]" />
+                  Scan to Check Application Status
+                </span>
+                <p className="text-[11px] text-slate-300 leading-relaxed">
+                  Scan this QR code with any smartphone camera to open the verification portal directly and monitor your application status anytime using reference <strong className="text-amber-400 font-mono">{submittedApp.referenceNumber}</strong>.
+                </p>
+                <a
+                  href={`#verify-status?ref=${submittedApp.referenceNumber}`}
+                  onClick={() => {
+                    handleReset();
+                    window.location.hash = `#verify-status?ref=${submittedApp.referenceNumber}`;
+                  }}
+                  className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-400 hover:text-amber-300 hover:underline pt-0.5 cursor-pointer"
+                >
+                  <span>Open Verification Portal Now →</span>
+                </a>
               </div>
             </div>
 

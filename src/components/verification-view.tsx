@@ -32,6 +32,7 @@ import {
   verificationStore,
   VerificationSubmission,
 } from '@/lib/verification-store';
+import { applicationStore, JobApplication } from '@/lib/application-store';
 import { formatBytes } from '@/lib/crypto';
 
 interface VerificationViewProps {
@@ -56,20 +57,25 @@ export function VerificationView({ onGoToAdmin, initialShowQrModal }: Verificati
   const [portalUrl, setPortalUrl] = useState<string>('');
   const [copiedQrLink, setCopiedQrLink] = useState(false);
   const [showQrModal, setShowQrModal] = useState(false);
+  const [submittedStatusQr, setSubmittedStatusQr] = useState<string>('');
   const qrSectionRef = useRef<HTMLDivElement>(null);
   const formSectionRef = useRef<HTMLDivElement>(null);
+  const statusSectionRef = useRef<HTMLDivElement>(null);
 
-  // Generate QR Code encoding direct link to Verify Job Letter Section
+  // Generate QR Code encoding direct link to Verify & Status Portal (using public Shared App URL so any phone can access it)
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const origin = window.location.origin;
       const isLocal = origin.includes('localhost') || origin.includes('127.0.0.1') || origin.includes('0.0.0.0');
-      // If local dev environment, use the live hosted domain so phones can scan and open it from anywhere
-      const targetBase = isLocal
-        ? 'https://ais-dev-ucblzge2fhhoifdaarjri7-411900850859.asia-southeast1.run.app'
-        : `${origin}${window.location.pathname.replace(/\/$/, '')}`;
+      // When accessed from development session (ais-dev) or localhost, use the public Shared App URL (ais-pre) so external mobile devices can open it freely without 404
+      let targetBase = origin;
+      if (origin.includes('ais-dev-')) {
+        targetBase = origin.replace('ais-dev-', 'ais-pre-');
+      } else if (isLocal) {
+        targetBase = 'https://ais-pre-ucblzge2fhhoifdaarjri7-411900850859.asia-southeast1.run.app';
+      }
 
-      const directUrl = `${targetBase}/#verify-form`;
+      const directUrl = `${targetBase}/#verify-status`;
       setPortalUrl(directUrl);
 
       void QRCode.toDataURL(directUrl, {
@@ -81,16 +87,50 @@ export function VerificationView({ onGoToAdmin, initialShowQrModal }: Verificati
     }
   }, []);
 
-  // When visiting #verify or #verify-form, scroll directly to the form section
+  // When visiting #verify, #verify-status, #verify-form, or passing ?ref=..., route smoothly to appropriate section
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const hash = window.location.hash;
-      if (hash.includes('verify') && !hash.includes('qr')) {
+    if (typeof window === 'undefined') return;
+
+    const checkHashAndParams = () => {
+      const hash = window.location.hash || '';
+      const search = window.location.search || '';
+
+      // Check if reference code is passed via query or hash params (e.g. ?ref=WBA-APP-2026-7841)
+      let refParam = '';
+      if (search) {
+        const params = new URLSearchParams(search);
+        refParam = params.get('ref') || params.get('code') || '';
+      }
+      if (!refParam && hash.includes('?')) {
+        const queryPart = hash.slice(hash.indexOf('?') + 1);
+        const params = new URLSearchParams(queryPart);
+        refParam = params.get('ref') || params.get('code') || '';
+      }
+
+      if (refParam) {
+        setStatusSearchCode(refParam);
+        handleLookupStatus(refParam);
+        setTimeout(() => {
+          statusSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }, 250);
+      } else if (hash.includes('status')) {
+        setTimeout(() => {
+          statusSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }, 200);
+      } else if (hash.includes('verify-form')) {
+        setTimeout(() => {
+          formSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }, 200);
+      } else if (hash.includes('verify') && !hash.includes('qr')) {
         setTimeout(() => {
           formSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }, 200);
       }
-    }
+    };
+
+    checkHashAndParams();
+    window.addEventListener('hashchange', checkHashAndParams);
+    return () => window.removeEventListener('hashchange', checkHashAndParams);
   }, []);
 
   // Auto-scroll or open if requested from Verification QR button
@@ -129,9 +169,14 @@ export function VerificationView({ onGoToAdmin, initialShowQrModal }: Verificati
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Status Check lookup state
+  // Status Check lookup state (supports both Verification Submissions and Job Applications)
+  type StatusLookupResult =
+    | { type: 'verification'; data: VerificationSubmission }
+    | { type: 'application'; data: JobApplication }
+    | null;
+
   const [statusSearchCode, setStatusSearchCode] = useState('');
-  const [statusResult, setStatusResult] = useState<VerificationSubmission | null>(null);
+  const [statusResult, setStatusResult] = useState<StatusLookupResult>(null);
   const [statusSearched, setStatusSearched] = useState(false);
 
   // Submitted confirmation state
@@ -246,6 +291,24 @@ export function VerificationView({ onGoToAdmin, initialShowQrModal }: Verificati
 
     setSubmittedRefCode(generatedRef);
     setIsSubmitted(true);
+
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    const isLocal = origin.includes('localhost') || origin.includes('127.0.0.1') || origin.includes('0.0.0.0');
+    let targetBase = origin;
+    if (origin.includes('ais-dev-')) {
+      targetBase = origin.replace('ais-dev-', 'ais-pre-');
+    } else if (isLocal) {
+      targetBase = 'https://ais-pre-ucblzge2fhhoifdaarjri7-411900850859.asia-southeast1.run.app';
+    }
+    const statusUrl = `${targetBase}/#verify-status?ref=${generatedRef}`;
+
+    void QRCode.toDataURL(statusUrl, {
+      width: 260,
+      margin: 1,
+      color: { dark: '#111827', light: '#ffffff' },
+      errorCorrectionLevel: 'M',
+    }).then(setSubmittedStatusQr);
+
     window.scrollTo({ top: 120, behavior: 'smooth' });
   };
 
@@ -297,13 +360,34 @@ NSW Fair Trading Builder Licence: #274910C
     URL.revokeObjectURL(url);
   };
 
-  // Status check lookup
+  // Status check lookup (searches both verification submissions and job applications)
+  const handleLookupStatus = (rawQuery?: string) => {
+    const query = (rawQuery !== undefined ? rawQuery : statusSearchCode).trim();
+    if (!query) return;
+
+    // Check verification submissions first
+    const verFound = verificationStore.getByRef(query);
+    if (verFound) {
+      setStatusResult({ type: 'verification', data: verFound });
+      setStatusSearched(true);
+      return;
+    }
+
+    // Check job applications next
+    const appFound = applicationStore.getByReference(query);
+    if (appFound) {
+      setStatusResult({ type: 'application', data: appFound });
+      setStatusSearched(true);
+      return;
+    }
+
+    setStatusResult(null);
+    setStatusSearched(true);
+  };
+
   const handleCheckStatus = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!statusSearchCode.trim()) return;
-    const found = verificationStore.getByRef(statusSearchCode);
-    setStatusResult(found || null);
-    setStatusSearched(true);
+    handleLookupStatus();
   };
 
   return (
@@ -379,10 +463,10 @@ NSW Fair Trading Builder Licence: #274910C
             <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
               <strong className="text-xs uppercase font-mono tracking-wider text-[#1d352c] flex items-center gap-2 font-bold">
                 <QrCode size={16} className="text-[#d32f2f]" />
-                Verification QR Code
+                Application &amp; Verification QR
               </strong>
               <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-mono font-bold border border-emerald-300 flex items-center gap-1">
-                <Smartphone size={11} /> SCAN TO OPEN
+                <Smartphone size={11} /> SCAN TO CHECK STATUS
               </span>
             </div>
 
@@ -396,7 +480,7 @@ NSW Fair Trading Builder Licence: #274910C
                 {qrDataUrl ? (
                   <img
                     src={qrDataUrl}
-                    alt="Scan to open We Build Australia Document Verification Portal"
+                    alt="Scan to check application status or open verification portal"
                     className="w-48 h-48 mx-auto object-contain rounded"
                   />
                 ) : (
@@ -414,16 +498,16 @@ NSW Fair Trading Builder Licence: #274910C
               {/* Instructions */}
               <div className="space-y-1">
                 <strong className="text-xs font-bold text-[#1d352c] block font-sans">
-                  Scan with your phone camera
+                  Check Application Status via Mobile
                 </strong>
                 <p className="text-[11px] leading-relaxed text-[#68746c]">
-                  Point any smartphone camera (iPhone or Android) at this QR code to immediately open this official verification page on your mobile device.
+                  Want to check the status of your application or verify an employment offer? Point any smartphone camera (iPhone or Android) at this QR code to immediately open the verification portal on your mobile device.
                 </p>
               </div>
 
               {/* Direct Link Display */}
               <div className="p-2 bg-[#f6f6f1] rounded-lg border border-slate-200 text-[11px] font-mono text-slate-700 flex items-center justify-between gap-2 overflow-hidden text-left">
-                <span className="truncate">{portalUrl || 'https://...#verify'}</span>
+                <span className="truncate">{portalUrl || 'https://...#verify-status'}</span>
                 <button
                   type="button"
                   onClick={handleCopyQrUrl}
@@ -468,13 +552,22 @@ NSW Fair Trading Builder Licence: #274910C
           </div>
 
           {/* Check Existing Reference Code Status */}
-          <div className="p-5 bg-white border border-[#d4dbd4] rounded-xl shadow-xs space-y-3">
-            <strong className="text-xs font-mono uppercase text-[#1d352c] block font-bold flex items-center gap-1.5">
-              <Search size={14} className="text-[#d32f2f]" />
-              Check Existing Verification Status
-            </strong>
+          <div
+            id="status-check-section"
+            ref={statusSectionRef}
+            className="p-5 bg-white border border-[#d4dbd4] rounded-xl shadow-xs space-y-3 scroll-mt-24"
+          >
+            <div className="flex items-center justify-between">
+              <strong className="text-xs font-mono uppercase text-[#1d352c] block font-bold flex items-center gap-1.5">
+                <Search size={14} className="text-[#d32f2f]" />
+                Check Application &amp; Verification Status
+              </strong>
+              <span className="text-[10px] font-mono text-slate-500 bg-slate-100 px-2 py-0.5 rounded">
+                Live Status Tracker
+              </span>
+            </div>
             <p className="text-xs text-[#68746c]">
-              Already lodged a document? Enter your tracking reference code below:
+              Already lodged an application or offer letter? Enter your tracking reference code below (e.g. <code>WBA-APP-2026-XXXX</code> or <code>WBA-VER-2026-XXXX</code>):
             </p>
 
             <form onSubmit={handleCheckStatus} className="space-y-2">
@@ -483,14 +576,14 @@ NSW Fair Trading Builder Licence: #274910C
                   type="text"
                   value={statusSearchCode}
                   onChange={(e) => setStatusSearchCode(e.target.value)}
-                  placeholder="e.g. WBA-VER-2026-948201"
+                  placeholder="e.g. WBA-APP-2026-7841 or WBA-VER-2026-948201"
                   className="flex-1 bg-[#f6f6f1] border border-[#d4dbd4] rounded-lg px-3 py-2 text-xs font-mono text-[#24382f] focus:outline-none focus:border-[#1d352c]"
                 />
                 <button
                   type="submit"
-                  className="px-3 py-2 rounded-lg bg-[#1d352c] hover:bg-[#14241e] text-white text-xs font-bold transition-colors cursor-pointer"
+                  className="px-3.5 py-2 rounded-lg bg-[#1d352c] hover:bg-[#14241e] text-white text-xs font-bold transition-colors cursor-pointer"
                 >
-                  Check
+                  Check Status
                 </button>
               </div>
             </form>
@@ -498,40 +591,78 @@ NSW Fair Trading Builder Licence: #274910C
             {statusSearched && (
               <div className="pt-2 text-xs font-mono border-t border-slate-100">
                 {statusResult ? (
-                  <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg space-y-1">
-                    <div className="flex justify-between">
-                      <span className="text-slate-500">Candidate:</span>
-                      <strong className="text-slate-800">{statusResult.candidateName}</strong>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-500">Document:</span>
-                      <strong className="text-slate-800 truncate max-w-[150px]">{statusResult.fileName}</strong>
-                    </div>
-                    <div className="flex justify-between items-center pt-1">
-                      <span className="text-slate-500">Current Status:</span>
-                      {statusResult.status === 'verified' ? (
-                        <span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-bold text-[10px]">
-                          ✓ VERIFIED AUTHENTIC
-                        </span>
-                      ) : statusResult.status === 'flagged' ? (
-                        <span className="px-2 py-0.5 rounded bg-red-100 text-red-800 font-bold text-[10px]">
-                          ✗ FLAGGED SUSPICIOUS
-                        </span>
-                      ) : (
-                        <span className="px-2 py-0.5 rounded bg-amber-100 text-amber-800 font-bold text-[10px]">
-                          ⏳ UNDER REVIEW BY HR
-                        </span>
+                  statusResult.type === 'verification' ? (
+                    <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg space-y-1.5">
+                      <div className="flex items-center justify-between border-b border-slate-200 pb-1.5">
+                        <span className="text-[10px] font-mono text-slate-500 uppercase">Document Verification</span>
+                        <span className="text-[10px] font-mono font-bold text-slate-700">{statusResult.data.refCode}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-slate-500">Candidate:</span>
+                        <strong className="text-slate-800">{statusResult.data.candidateName}</strong>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-slate-500">Document:</span>
+                        <strong className="text-slate-800 truncate max-w-[150px]">{statusResult.data.fileName}</strong>
+                      </div>
+                      <div className="flex justify-between items-center pt-1">
+                        <span className="text-slate-500">Current Status:</span>
+                        {statusResult.data.status === 'verified' ? (
+                          <span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-bold text-[10px]">
+                            ✓ VERIFIED AUTHENTIC
+                          </span>
+                        ) : statusResult.data.status === 'flagged' ? (
+                          <span className="px-2 py-0.5 rounded bg-red-100 text-red-800 font-bold text-[10px]">
+                            ✗ FLAGGED SUSPICIOUS
+                          </span>
+                        ) : (
+                          <span className="px-2 py-0.5 rounded bg-amber-100 text-amber-800 font-bold text-[10px]">
+                            ⏳ UNDER REVIEW BY HR
+                          </span>
+                        )}
+                      </div>
+                      {statusResult.data.adminReplyNotes && (
+                        <div className="text-[11px] text-slate-600 pt-1 font-sans border-t border-slate-200 mt-1">
+                          <strong>HR Note:</strong> {statusResult.data.adminReplyNotes}
+                        </div>
                       )}
                     </div>
-                    {statusResult.adminReplyNotes && (
-                      <div className="text-[11px] text-slate-600 pt-1 font-sans">
-                        <strong>HR Note:</strong> {statusResult.adminReplyNotes}
+                  ) : (
+                    <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg space-y-1.5">
+                      <div className="flex items-center justify-between border-b border-slate-200 pb-1.5">
+                        <span className="text-[10px] font-mono text-slate-500 uppercase">Employment Application</span>
+                        <span className="text-[10px] font-mono font-bold text-amber-700">{statusResult.data.referenceNumber}</span>
                       </div>
-                    )}
-                  </div>
+                      <div className="flex justify-between">
+                        <span className="text-slate-500">Candidate:</span>
+                        <strong className="text-slate-800">{statusResult.data.candidateName}</strong>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-slate-500">Role:</span>
+                        <strong className="text-slate-800 truncate max-w-[170px]">{statusResult.data.jobTitle}</strong>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-slate-500">Division:</span>
+                        <span className="text-slate-700">{statusResult.data.division}</span>
+                      </div>
+                      <div className="flex justify-between items-center pt-1">
+                        <span className="text-slate-500">Current Status:</span>
+                        <span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-bold text-[10px]">
+                          {statusResult.data.status === 'Shortlisted' ? '⭐ Shortlisted for Interview' :
+                           statusResult.data.status === 'Interview Scheduled' ? '📅 Interview Scheduled' :
+                           statusResult.data.status === 'Approved' ? '✓ Approved for Onboarding' :
+                           statusResult.data.status === 'Verification in Progress' ? '🔍 Verification in Progress' :
+                           '⏳ Application Received & Registered'}
+                        </span>
+                      </div>
+                      <div className="text-[11px] text-slate-600 pt-1 font-sans border-t border-slate-200 mt-1">
+                        <strong>Directorate Update:</strong> Official communications are dispatched directly to {statusResult.data.email}.
+                      </div>
+                    </div>
+                  )
                 ) : (
                   <div className="p-2.5 bg-red-50 border border-red-200 rounded text-red-800 text-[11px]">
-                    No submission record found for tracking code <strong>{statusSearchCode}</strong>. Please ensure the reference is entered correctly.
+                    No submission record or application found for tracking code <strong>{statusSearchCode}</strong>. Please ensure the reference is entered correctly (e.g. WBA-APP-2026-XXXX or WBA-VER-2026-XXXX).
                   </div>
                 )}
               </div>
@@ -829,6 +960,44 @@ NSW Fair Trading Builder Licence: #274910C
                 </div>
               </div>
 
+              {/* QR Code to Track Application / Document Status */}
+              <div className="p-4 bg-white border border-[#d4dbd4] rounded-xl flex flex-col sm:flex-row items-center gap-4 text-left">
+                {submittedStatusQr ? (
+                  <img
+                    src={submittedStatusQr}
+                    alt={`Scan to check status of ${submittedRefCode}`}
+                    className="w-24 h-24 shrink-0 object-contain p-1 border border-slate-200 rounded-lg shadow-2xs bg-white"
+                  />
+                ) : (
+                  <div className="w-24 h-24 shrink-0 bg-slate-100 rounded-lg flex items-center justify-center text-[10px] text-slate-400">
+                    Generating QR...
+                  </div>
+                )}
+                <div className="space-y-1 font-sans">
+                  <span className="text-xs font-bold text-[#1d352c] flex items-center gap-1.5 font-mono">
+                    <QrCode size={14} className="text-[#d32f2f]" />
+                    Scan to Track Verification Status
+                  </span>
+                  <p className="text-[11px] text-slate-600 leading-relaxed">
+                    Scan this QR code with any smartphone to open the verification portal directly on your mobile device and check the review status for <strong>{submittedRefCode}</strong> anytime.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setStatusSearchCode(submittedRefCode);
+                      handleLookupStatus(submittedRefCode);
+                      setIsSubmitted(false);
+                      setTimeout(() => {
+                        statusSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                      }, 200);
+                    }}
+                    className="inline-flex items-center gap-1 text-[11px] font-bold text-[#1d352c] hover:underline pt-0.5 cursor-pointer"
+                  >
+                    <span>Check Live Status in Portal Now →</span>
+                  </button>
+                </div>
+              </div>
+
               <div className="pt-2 flex flex-wrap items-center gap-3">
                 <button
                   type="button"
@@ -880,7 +1049,7 @@ NSW Fair Trading Builder Licence: #274910C
             <div className="flex items-center justify-between border-b border-slate-200 pb-3 no-print">
               <span className="text-xs font-mono font-bold text-[#1d352c] flex items-center gap-1.5">
                 <QrCode size={16} className="text-[#d32f2f]" />
-                OFFICIAL VERIFICATION SCANNER
+                APPLICATION &amp; VERIFICATION SCANNER
               </span>
               <button
                 type="button"
@@ -897,7 +1066,7 @@ NSW Fair Trading Builder Licence: #274910C
                   We Build Australia Pty Ltd (ACN 168 514 829)
                 </span>
                 <h3 className="text-xl font-bold text-[#1d352c] font-sans">
-                  Mobile Document Verification
+                  Application Status &amp; Verification Portal
                 </h3>
                 <span className="text-xs text-slate-500 block">
                   NSW Fair Trading Builder Licence #274910C
@@ -918,7 +1087,7 @@ NSW Fair Trading Builder Licence: #274910C
               <div className="space-y-1 text-xs text-slate-700 font-sans">
                 <strong className="block text-[#1d352c]">Instant Mobile Access:</strong>
                 <p className="text-[11px] text-slate-600 leading-relaxed">
-                  Scan this QR code with any iPhone or Android camera to open the official verification page directly on your phone.
+                  Scan this QR code with any smartphone camera (iPhone or Android) to open the verification portal directly on your phone and track your application or document status.
                 </p>
                 <div className="p-2 bg-slate-50 rounded border border-slate-200 font-mono text-[10px] text-slate-600 truncate mt-1">
                   {portalUrl}

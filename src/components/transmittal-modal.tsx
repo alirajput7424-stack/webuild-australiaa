@@ -18,7 +18,13 @@ export function TransmittalModal({ transfer, onClose }: TransmittalModalProps) {
   useEffect(() => {
     if (!transfer) return;
     const origin = typeof window !== 'undefined' ? window.location.origin : '';
-    const verifyUrl = `${origin}/#receive?code=${transfer.code}&key=${encodeURIComponent(transfer.keyFragment)}`;
+    let targetBase = origin;
+    if (origin.includes('ais-dev-')) {
+      targetBase = origin.replace('ais-dev-', 'ais-pre-');
+    } else if (origin.includes('localhost') || origin.includes('127.0.0.1')) {
+      targetBase = 'https://ais-pre-ucblzge2fhhoifdaarjri7-411900850859.asia-southeast1.run.app';
+    }
+    const verifyUrl = `${targetBase}/#receive?code=${transfer.code}&key=${encodeURIComponent(transfer.keyFragment)}`;
     void QRCode.toDataURL(verifyUrl, {
       width: 200,
       margin: 1,

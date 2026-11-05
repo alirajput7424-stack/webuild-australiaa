@@ -159,7 +159,13 @@ export function SendTransfer({
 
       // Generate QR Code URL linking directly to receiver with code
       const origin = typeof window !== 'undefined' ? window.location.origin : '';
-      const receiverUrl = `${origin}/#receive?code=${code}&key=${encodeURIComponent(encrypted.keyFragment)}`;
+      let targetBase = origin;
+      if (origin.includes('ais-dev-')) {
+        targetBase = origin.replace('ais-dev-', 'ais-pre-');
+      } else if (origin.includes('localhost') || origin.includes('127.0.0.1')) {
+        targetBase = 'https://ais-pre-ucblzge2fhhoifdaarjri7-411900850859.asia-southeast1.run.app';
+      }
+      const receiverUrl = `${targetBase}/#receive?code=${code}&key=${encodeURIComponent(encrypted.keyFragment)}`;
       try {
         const qr = await QRCode.toDataURL(receiverUrl, {
           width: 300,

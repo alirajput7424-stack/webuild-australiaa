@@ -96,7 +96,7 @@ export function Footer({
           National Trust Award ↗
         </a>
         <button type="button" onClick={onGoToVerifyQr || onGoToVerify}>
-          Verification QR
+          Verification &amp; Status QR
         </button>
         <button type="button" onClick={onGoToVault}>
           Subcontractor vault
