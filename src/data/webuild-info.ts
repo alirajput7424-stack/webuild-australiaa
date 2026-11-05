@@ -81,19 +81,19 @@ export const WEBUILD_COMPANY_DETAILS = {
   
   headquarters: {
     melbourne: {
-      title: 'Sydney / Parramatta Head Office',
-      address: 'Level 3, 20-22 Macquarie Street',
-      city: 'Parramatta',
+      title: 'Sydney / North Sydney Head Office',
+      address: 'Level 19/99 Walker Street',
+      city: 'North Sydney',
       state: 'NSW',
-      postcode: '2150',
+      postcode: '2060',
       phone: '+61 420 127 424',
     },
     sydney: {
       title: 'Sydney Operations Office',
-      address: 'Level 3, 20-22 Macquarie Street',
-      city: 'Parramatta',
+      address: 'Level 19/99 Walker Street',
+      city: 'North Sydney',
       state: 'NSW',
-      postcode: '2150',
+      postcode: '2060',
       phone: '+61 420 127 424',
     },
     snowy: {
@@ -106,10 +106,10 @@ export const WEBUILD_COMPANY_DETAILS = {
     },
     perth: {
       title: 'Tender & Estimating Division',
-      address: 'Level 3, 20-22 Macquarie Street',
-      city: 'Parramatta',
+      address: 'Level 19/99 Walker Street',
+      city: 'North Sydney',
       state: 'NSW',
-      postcode: '2150',
+      postcode: '2060',
       phone: '+61 420 127 424',
     },
   },

@@ -57,18 +57,39 @@ export function VerificationView({ onGoToAdmin, initialShowQrModal }: Verificati
   const [copiedQrLink, setCopiedQrLink] = useState(false);
   const [showQrModal, setShowQrModal] = useState(false);
   const qrSectionRef = useRef<HTMLDivElement>(null);
+  const formSectionRef = useRef<HTMLDivElement>(null);
 
-  // Generate QR Code encoding this verification page URL
+  // Generate QR Code encoding direct link to Verify Job Letter Section
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      const url = `${window.location.origin}${window.location.pathname}#verify`;
-      setPortalUrl(url);
-      void QRCode.toDataURL(url, {
+      const origin = window.location.origin;
+      const isLocal = origin.includes('localhost') || origin.includes('127.0.0.1') || origin.includes('0.0.0.0');
+      // If local dev environment, use the live hosted domain so phones can scan and open it from anywhere
+      const targetBase = isLocal
+        ? 'https://ais-dev-ucblzge2fhhoifdaarjri7-411900850859.asia-southeast1.run.app'
+        : `${origin}${window.location.pathname.replace(/\/$/, '')}`;
+
+      const directUrl = `${targetBase}/#verify-form`;
+      setPortalUrl(directUrl);
+
+      void QRCode.toDataURL(directUrl, {
         width: 320,
         margin: 1,
         color: { dark: '#111827', light: '#ffffff' },
         errorCorrectionLevel: 'H',
       }).then(setQrDataUrl);
+    }
+  }, []);
+
+  // When visiting #verify or #verify-form, scroll directly to the form section
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const hash = window.location.hash;
+      if (hash.includes('verify') && !hash.includes('qr')) {
+        setTimeout(() => {
+          formSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }, 200);
+      }
     }
   }, []);
 
@@ -260,7 +281,7 @@ registered email address (${email}) from info@webuildgroup.company within
 
 Company Contact:
 We Build Australia Pty Ltd
-Level 3, 20-22 Macquarie Street, Parramatta NSW 2150
+Level 19/99 Walker Street, North Sydney NSW 2060
 Phone: +61 420 127 424 | Email: info@webuildgroup.company
 NSW Fair Trading Builder Licence: #274910C
 ======================================================================`;
@@ -303,8 +324,8 @@ NSW Fair Trading Builder Licence: #274910C
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-start">
-        {/* Left Informational Sidebar */}
-        <div className="lg:col-span-5 space-y-6">
+        {/* Left Informational Sidebar - Mobile order-2, Desktop lg:order-1 */}
+        <div className="order-2 lg:order-1 lg:col-span-5 space-y-6">
           <div className="p-5 bg-white border border-[#d4dbd4] rounded-xl shadow-xs space-y-3.5">
             <strong className="text-xs uppercase font-mono tracking-wider text-[#1d352c] block font-bold">
               How Company Verification Works:
@@ -532,21 +553,26 @@ NSW Fair Trading Builder Licence: #274910C
           )}
         </div>
 
-        {/* Right Main Interactive Form */}
-        <div className="lg:col-span-7 bg-white border border-[#d4dbd4] rounded-2xl p-6 sm:p-8 shadow-sm">
+        {/* Right Main Interactive Form - Directly accessible via QR Scan & Mobile order-1 */}
+        <div
+          id="verify-job-letter-section"
+          ref={formSectionRef}
+          className="order-1 lg:order-2 lg:col-span-7 bg-white border-2 border-[#1d352c] rounded-2xl p-6 sm:p-8 shadow-sm scroll-mt-24"
+        >
           {!isSubmitted ? (
             <form onSubmit={handleSubmitVerification} className="space-y-4">
               <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                <span className="px-2.5 py-1 rounded bg-[#e8f0ea] text-[#1d352c] text-[10px] font-mono font-bold">
-                  DOCUMENT LODGEMENT FORM
+                <span className="px-2.5 py-1 rounded bg-[#e8f0ea] text-[#1d352c] text-[10px] font-mono font-bold flex items-center gap-1.5">
+                  <BadgeCheck size={13} className="text-[#1d352c]" />
+                  VERIFY JOB LETTER SECTION
                 </span>
                 <span className="text-[11px] font-mono text-[#68746c]">
                   NSW Fair Trading Licence #274910C
                 </span>
               </div>
 
-              <h2 className="text-xl font-bold text-[#1d352c] font-sans">
-                Submit Document for Official Verification
+              <h2 className="text-xl sm:text-2xl font-bold text-[#1d352c] font-sans">
+                Verify Your Job Offer Letter
               </h2>
               <p className="text-xs text-[#68746c]">
                 Please enter your registered details, the email where company HR should send your verification response, and attach your document.
@@ -787,7 +813,7 @@ NSW Fair Trading Builder Licence: #274910C
                   Your document <strong>{fileName}</strong> has been logged into our secure Directorate verification register under Tracking Reference <strong>{submittedRefCode}</strong>.
                 </p>
                 <p>
-                  Our senior HR team in Parramatta will review the document against our official project contracts and authorized NSW directorate signatories. You will receive an official verification determination directly at <strong>{email}</strong> from <strong>info@webuildgroup.company</strong> within 1–2 business days.
+                  Our senior HR team in North Sydney will review the document against our official project contracts and authorized NSW directorate signatories. You will receive an official verification determination directly at <strong>{email}</strong> from <strong>info@webuildgroup.company</strong> within 1–2 business days.
                 </p>
               </div>
 

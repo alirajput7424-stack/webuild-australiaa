@@ -83,7 +83,7 @@ export function TransmittalModal({ transfer, onClose }: TransmittalModalProps) {
                 ABN: 89 168 514 829 • NSW Fair Trading Builder Licence #274910C • Founded 2014
               </p>
               <p className="text-[10px] text-slate-500 font-mono">
-                Level 3, 20-22 Macquarie Street, Parramatta NSW 2150 • Tel: +61 2 9635 1200
+                Level 19/99 Walker Street, North Sydney NSW 2060 • Tel: +61 420 127 424
               </p>
             </div>
 

@@ -32,7 +32,7 @@ export default function App() {
       if (hash.startsWith('#verify-qr')) {
         setActiveTab('verify');
         setInitialShowQrModal(true);
-      } else if (hash.startsWith('#verify')) {
+      } else if (hash.startsWith('#verify-form') || hash.startsWith('#verify')) {
         setActiveTab('verify');
         setInitialShowQrModal(false);
       } else if (hash.startsWith('#admin') || hash.startsWith('#staff')) {

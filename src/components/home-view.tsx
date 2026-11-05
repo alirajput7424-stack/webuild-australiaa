@@ -270,14 +270,14 @@ export function HomeView({
           {/* Contact Details (Screenshot 1: address with link + phone) */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '28px' }}>
             <a
-              href="https://maps.google.com/?q=20-22+Macquarie+Street+Parramatta+NSW+2150"
+              href="https://maps.google.com/?q=Level+19+99+Walker+Street+North+Sydney+NSW+2060"
               target="_blank"
               rel="noopener noreferrer"
               className="careers-address"
               title="Open We Build Australia office on Google Maps"
             >
               <MapPin size={15} />
-              <span>Level 3, 20-22 Macquarie Street, Parramatta NSW 2150 ↗</span>
+              <span>Level 19/99 Walker Street, North Sydney NSW 2060 ↗</span>
             </a>
 
             <a

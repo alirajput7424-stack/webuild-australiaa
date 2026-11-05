@@ -121,7 +121,7 @@ Agency/Source: ${sub.agencyOrConsultant || 'Direct Submission'}
 Candidate Notes: ${sub.notes || 'None'}
 Admin Notes: ${sub.adminReplyNotes || 'Pending Directorate Review'}
 ----------------------------------------------------------------------
-We Build Australia Pty Ltd • Head Office: Level 3, 20-22 Macquarie Street, Parramatta NSW 2150
+We Build Australia Pty Ltd • Head Office: Level 19/99 Walker Street, North Sydney NSW 2060
 Contact: +61 420 127 424 | info@webuildgroup.company`;
       const blob = new Blob([content], { type: 'text/plain' });
       const url = URL.createObjectURL(blob);
@@ -298,7 +298,7 @@ Contact: +61 420 127 424 | info@webuildgroup.company`;
                 Signed in as <strong className="text-white">Administrator</strong>
               </span>
               <span className="text-[10px] text-slate-400 font-mono">
-                HR Directorate Parramatta
+                HR Directorate North Sydney
               </span>
             </div>
 
@@ -487,7 +487,7 @@ Contact: +61 420 127 424 | info@webuildgroup.company`;
                       : 'PENDING FURTHER INFORMATION'
                   }%0D%0A%0D%0ANotes: ${encodeURIComponent(
                     item.adminReplyNotes || 'Document authenticated against NSW Operations Directorate records.'
-                  )}%0D%0A%0D%0APlease contact our Parramatta office at +61 420 127 424 if you require additional documentation.%0D%0A%0D%0ARegards,%0D%0AWe Build Australia Pty Ltd HR Directorate%0D%0Ainfo@webuildgroup.company%0D%0ALevel 3, 20-22 Macquarie Street, Parramatta NSW 2150`;
+                  )}%0D%0A%0D%0APlease contact our North Sydney office at +61 420 127 424 if you require additional documentation.%0D%0A%0D%0ARegards,%0D%0AWe Build Australia Pty Ltd HR Directorate%0D%0Ainfo@webuildgroup.company%0D%0ALevel 19/99 Walker Street, North Sydney NSW 2060`;
 
                   return (
                     <div

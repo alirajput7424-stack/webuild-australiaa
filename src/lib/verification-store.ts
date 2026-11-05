@@ -72,7 +72,7 @@ const SEEDED_SUBMISSIONS: VerificationSubmission[] = [
     fileSize: 954000, // 954 KB
     fileType: 'application/pdf',
     agencyOrConsultant: 'Direct Senior Leadership Inquiry',
-    notes: 'Offer received via email claiming to be from We Build Australia Parramatta Office.',
+    notes: 'Offer received via email claiming to be from We Build Australia North Sydney Office.',
     submittedAt: new Date(Date.now() - 3600000 * 28).toISOString(),
     status: 'pending_review',
   },

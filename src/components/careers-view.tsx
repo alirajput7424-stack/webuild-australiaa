@@ -188,7 +188,7 @@ export function CareersView() {
               Official We Build Australia Recruitment Inquiries
             </strong>
             <p className="text-[#68746c] text-xs mt-1">
-              For employment inquiries, apprenticeships, and trade submissions, please contact our Parramatta head office at <strong>{WE_BUILD_AUSTRALIA_PROFILE.headOffice.phone}</strong> or visit Level 3, 20-22 Macquarie Street, Parramatta NSW 2150.
+              For employment inquiries, apprenticeships, and trade submissions, please contact our North Sydney head office at <strong>{WE_BUILD_AUSTRALIA_PROFILE.headOffice.phone}</strong> or visit Level 19/99 Walker Street, North Sydney NSW 2060.
             </p>
           </div>
         </div>
