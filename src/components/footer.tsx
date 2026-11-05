@@ -7,6 +7,7 @@ interface FooterProps {
   onGoToServices?: () => void;
   onGoToProjects?: () => void;
   onGoToVerify?: () => void;
+  onGoToVerifyQr?: () => void;
   onGoToVault?: () => void;
   onGoToAdmin?: () => void;
 }
@@ -16,6 +17,7 @@ export function Footer({
   onGoToServices,
   onGoToProjects,
   onGoToVerify,
+  onGoToVerifyQr,
   onGoToVault,
   onGoToAdmin,
 }: FooterProps) {
@@ -93,7 +95,7 @@ export function Footer({
         <a href="https://www.nationaltrust.org.au/services/heritage-awards/" target="_blank" rel="noopener noreferrer">
           National Trust Award ↗
         </a>
-        <button type="button" onClick={onGoToVerify}>
+        <button type="button" onClick={onGoToVerifyQr || onGoToVerify}>
           Verification QR
         </button>
         <button type="button" onClick={onGoToVault}>

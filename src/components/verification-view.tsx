@@ -1,4 +1,5 @@
-import { useState, useRef, DragEvent, ChangeEvent } from 'react';
+import { useState, useRef, DragEvent, ChangeEvent, useEffect } from 'react';
+import QRCode from 'qrcode';
 import {
   ShieldCheck,
   Upload,
@@ -21,6 +22,10 @@ import {
   Phone,
   HelpCircle,
   FileCheck2,
+  QrCode,
+  Smartphone,
+  ExternalLink,
+  Maximize2,
 } from 'lucide-react';
 import { WE_BUILD_AUSTRALIA_PROFILE } from '@/data/webuild-australia';
 import {
@@ -31,12 +36,13 @@ import { formatBytes } from '@/lib/crypto';
 
 interface VerificationViewProps {
   onGoToAdmin?: () => void;
+  initialShowQrModal?: boolean;
 }
 
 const ACCEPTED_EXTENSIONS = ['.pdf', '.png', '.jpg', '.jpeg', '.webp', '.docx', '.doc'];
 const MAX_FILE_SIZE = 25 * 1024 * 1024; // 25 MB
 
-export function VerificationView({ onGoToAdmin }: VerificationViewProps) {
+export function VerificationView({ onGoToAdmin, initialShowQrModal }: VerificationViewProps) {
   // Submission Form State
   const [candidateName, setCandidateName] = useState('');
   const [email, setEmail] = useState('');
@@ -44,6 +50,53 @@ export function VerificationView({ onGoToAdmin }: VerificationViewProps) {
   const [position, setPosition] = useState('');
   const [context, setContext] = useState('');
   const [notes, setNotes] = useState('');
+
+  // Official QR Code State
+  const [qrDataUrl, setQrDataUrl] = useState<string>('');
+  const [portalUrl, setPortalUrl] = useState<string>('');
+  const [copiedQrLink, setCopiedQrLink] = useState(false);
+  const [showQrModal, setShowQrModal] = useState(false);
+  const qrSectionRef = useRef<HTMLDivElement>(null);
+
+  // Generate QR Code encoding this verification page URL
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const url = `${window.location.origin}${window.location.pathname}#verify`;
+      setPortalUrl(url);
+      void QRCode.toDataURL(url, {
+        width: 320,
+        margin: 1,
+        color: { dark: '#111827', light: '#ffffff' },
+        errorCorrectionLevel: 'H',
+      }).then(setQrDataUrl);
+    }
+  }, []);
+
+  // Auto-scroll or open if requested from Verification QR button
+  useEffect(() => {
+    if (initialShowQrModal || (typeof window !== 'undefined' && window.location.hash.includes('qr'))) {
+      setTimeout(() => {
+        qrSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 150);
+    }
+  }, [initialShowQrModal]);
+
+  const handleDownloadQr = () => {
+    if (!qrDataUrl) return;
+    const a = document.createElement('a');
+    a.href = qrDataUrl;
+    a.download = 'We_Build_Australia_Verification_Portal_QR.png';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  };
+
+  const handleCopyQrUrl = () => {
+    if (!portalUrl) return;
+    navigator.clipboard.writeText(portalUrl);
+    setCopiedQrLink(true);
+    setTimeout(() => setCopiedQrLink(false), 2000);
+  };
 
   // Uploaded file state
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
@@ -292,6 +345,92 @@ NSW Fair Trading Builder Licence: #274910C
                     You receive an official verification response sent directly to your email from <code>info@webuildgroup.company</code>.
                   </span>
                 </div>
+              </div>
+            </div>
+          </div>
+
+          {/* ================= OFFICIAL VERIFICATION QR SECTION ================= */}
+          <div
+            id="verification-qr-section"
+            ref={qrSectionRef}
+            className="p-5 bg-white border-2 border-[#1d352c] rounded-2xl shadow-sm space-y-3.5 relative overflow-hidden"
+          >
+            <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
+              <strong className="text-xs uppercase font-mono tracking-wider text-[#1d352c] flex items-center gap-2 font-bold">
+                <QrCode size={16} className="text-[#d32f2f]" />
+                Verification QR Code
+              </strong>
+              <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-mono font-bold border border-emerald-300 flex items-center gap-1">
+                <Smartphone size={11} /> SCAN TO OPEN
+              </span>
+            </div>
+
+            <div className="text-center space-y-2.5">
+              {/* QR Image Box */}
+              <div
+                onClick={() => setShowQrModal(true)}
+                className="relative inline-block p-3 bg-white rounded-xl border border-slate-200 shadow-2xs group cursor-pointer"
+                title="Click to enlarge QR code"
+              >
+                {qrDataUrl ? (
+                  <img
+                    src={qrDataUrl}
+                    alt="Scan to open We Build Australia Document Verification Portal"
+                    className="w-48 h-48 mx-auto object-contain rounded"
+                  />
+                ) : (
+                  <div className="w-48 h-48 flex items-center justify-center bg-slate-100 text-xs font-mono text-slate-400">
+                    Generating QR...
+                  </div>
+                )}
+                <div className="absolute inset-0 bg-slate-900/10 opacity-0 group-hover:opacity-100 transition-opacity rounded-xl flex items-center justify-center pointer-events-none">
+                  <span className="px-2.5 py-1 bg-white/95 rounded-md text-[10px] font-mono font-bold text-slate-800 shadow-sm flex items-center gap-1">
+                    <Maximize2 size={11} /> Click to Enlarge
+                  </span>
+                </div>
+              </div>
+
+              {/* Instructions */}
+              <div className="space-y-1">
+                <strong className="text-xs font-bold text-[#1d352c] block font-sans">
+                  Scan with your phone camera
+                </strong>
+                <p className="text-[11px] leading-relaxed text-[#68746c]">
+                  Point any smartphone camera (iPhone or Android) at this QR code to immediately open this official verification page on your mobile device.
+                </p>
+              </div>
+
+              {/* Direct Link Display */}
+              <div className="p-2 bg-[#f6f6f1] rounded-lg border border-slate-200 text-[11px] font-mono text-slate-700 flex items-center justify-between gap-2 overflow-hidden text-left">
+                <span className="truncate">{portalUrl || 'https://...#verify'}</span>
+                <button
+                  type="button"
+                  onClick={handleCopyQrUrl}
+                  className="px-2 py-1 rounded bg-white hover:bg-slate-100 text-slate-800 text-[10px] font-bold border border-slate-300 shrink-0 cursor-pointer transition-colors"
+                >
+                  {copiedQrLink ? 'Copied!' : 'Copy'}
+                </button>
+              </div>
+
+              {/* Actions */}
+              <div className="grid grid-cols-2 gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={handleDownloadQr}
+                  className="w-full py-2 px-3 rounded-lg bg-[#1d352c] hover:bg-[#14241e] text-white text-xs font-semibold cursor-pointer flex items-center justify-center gap-1.5 transition-colors shadow-2xs"
+                >
+                  <Download size={13} />
+                  <span>Save QR</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setShowQrModal(true)}
+                  className="w-full py-2 px-3 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-semibold cursor-pointer flex items-center justify-center gap-1.5 transition-colors"
+                >
+                  <Maximize2 size={13} />
+                  <span>Enlarge</span>
+                </button>
               </div>
             </div>
           </div>
@@ -707,6 +846,93 @@ NSW Fair Trading Builder Licence: #274910C
           )}
         </div>
       </div>
+
+      {/* Expanded QR Modal & Printable Notice */}
+      {showQrModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-xs">
+          <div className="relative w-full max-w-md bg-white text-slate-900 rounded-2xl shadow-2xl p-6 sm:p-8 space-y-4 print:p-0 print:border-none print-receipt">
+            <div className="flex items-center justify-between border-b border-slate-200 pb-3 no-print">
+              <span className="text-xs font-mono font-bold text-[#1d352c] flex items-center gap-1.5">
+                <QrCode size={16} className="text-[#d32f2f]" />
+                OFFICIAL VERIFICATION SCANNER
+              </span>
+              <button
+                type="button"
+                onClick={() => setShowQrModal(false)}
+                className="text-slate-400 hover:text-slate-700 cursor-pointer text-lg font-bold"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="text-center space-y-3 font-mono">
+              <div className="space-y-1">
+                <span className="text-[10px] text-slate-500 uppercase tracking-wider block font-bold">
+                  We Build Australia Pty Ltd (ACN 168 514 829)
+                </span>
+                <h3 className="text-xl font-bold text-[#1d352c] font-sans">
+                  Mobile Document Verification
+                </h3>
+                <span className="text-xs text-slate-500 block">
+                  NSW Fair Trading Builder Licence #274910C
+                </span>
+              </div>
+
+              {/* Large Crisp QR Image */}
+              <div className="p-4 bg-white rounded-2xl border-2 border-slate-900 inline-block shadow-md">
+                {qrDataUrl && (
+                  <img
+                    src={qrDataUrl}
+                    alt="We Build Australia Verification Portal QR Code"
+                    className="w-56 h-56 mx-auto object-contain"
+                  />
+                )}
+              </div>
+
+              <div className="space-y-1 text-xs text-slate-700 font-sans">
+                <strong className="block text-[#1d352c]">Instant Mobile Access:</strong>
+                <p className="text-[11px] text-slate-600 leading-relaxed">
+                  Scan this QR code with any iPhone or Android camera to open the official verification page directly on your phone.
+                </p>
+                <div className="p-2 bg-slate-50 rounded border border-slate-200 font-mono text-[10px] text-slate-600 truncate mt-1">
+                  {portalUrl}
+                </div>
+              </div>
+            </div>
+
+            <div className="pt-3 flex items-center justify-between border-t border-slate-200 no-print gap-2">
+              <button
+                type="button"
+                onClick={() => window.print()}
+                className="px-3.5 py-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold cursor-pointer flex items-center gap-1.5"
+              >
+                <Printer size={13} />
+                <span>Print Placard</span>
+              </button>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleCopyQrUrl}
+                  className="px-3 py-2 rounded-lg bg-white border border-slate-300 hover:bg-slate-100 text-slate-800 text-xs font-semibold cursor-pointer flex items-center gap-1"
+                >
+                  <Copy size={13} />
+                  <span>{copiedQrLink ? 'Copied Link!' : 'Copy Link'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleDownloadQr}
+                  className="px-3.5 py-2 rounded-lg bg-[#1d352c] hover:bg-[#14241e] text-white text-xs font-semibold cursor-pointer flex items-center gap-1.5"
+                >
+                  <Download size={13} />
+                  <span>Save QR</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

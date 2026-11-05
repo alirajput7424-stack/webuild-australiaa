@@ -23,13 +23,18 @@ export default function App() {
   const [receiverInitialKey, setReceiverInitialKey] = useState('');
   const [transmittalModalItem, setTransmittalModalItem] = useState<CodedTransferItem | null>(null);
   const [isQuickCodeOpen, setIsQuickCodeOpen] = useState(false);
+  const [initialShowQrModal, setInitialShowQrModal] = useState(false);
 
   // Sync with URL hashes
   useEffect(() => {
     const handleHash = () => {
       const hash = window.location.hash;
-      if (hash.startsWith('#verify')) {
+      if (hash.startsWith('#verify-qr')) {
         setActiveTab('verify');
+        setInitialShowQrModal(true);
+      } else if (hash.startsWith('#verify')) {
+        setActiveTab('verify');
+        setInitialShowQrModal(false);
       } else if (hash.startsWith('#admin') || hash.startsWith('#staff')) {
         setActiveTab('admin');
       } else if (hash.startsWith('#careers') || hash.startsWith('#jobs')) {
@@ -133,7 +138,10 @@ export default function App() {
 
         {/* TAB 5: JOB LETTER VERIFICATION PORTAL */}
         {activeTab === 'verify' && (
-          <VerificationView onGoToAdmin={() => handleNavChange('admin')} />
+          <VerificationView
+            onGoToAdmin={() => handleNavChange('admin')}
+            initialShowQrModal={initialShowQrModal}
+          />
         )}
 
         {/* TAB 6: ADMIN & HR DIRECTORATE PORTAL (PASSWORD PROTECTED) */}
@@ -219,7 +227,14 @@ export default function App() {
         onGoToCareers={() => handleNavChange('careers')}
         onGoToServices={() => handleNavChange('services')}
         onGoToProjects={() => handleNavChange('projects')}
-        onGoToVerify={() => handleNavChange('verify')}
+        onGoToVerify={() => {
+          setInitialShowQrModal(false);
+          handleNavChange('verify');
+        }}
+        onGoToVerifyQr={() => {
+          setInitialShowQrModal(true);
+          handleNavChange('verify');
+        }}
         onGoToVault={() => handleNavChange('vault')}
         onGoToAdmin={() => handleNavChange('admin')}
       />
